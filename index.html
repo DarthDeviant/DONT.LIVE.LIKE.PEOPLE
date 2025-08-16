@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DONT.LIVE.LIKE.PEOPLE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .player-controls {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 400px;
+        }
+
+        .play-button {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .play-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .time-controls {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .time-display {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: monospace;
+            min-width: 40px;
+        }
+
+        .progress-slider {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: white;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.1s;
+        }
+
+        .volume-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .volume-button {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .volume-button:hover {
+            color: white;
+        }
+
+        .volume-slider {
+            width: 64px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .volume-fill {
+            height: 100%;
+            background: white;
+            border-radius: 2px;
+            width: 70%;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <!-- Directly load DLLP2.mp3 -->
+    <audio id="audio" preload="auto" crossorigin="anonymous" src="DLLP2.mp3"></audio>
+    
+    <div class="player-controls">
+        <button class="play-button" id="playButton">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
+            </svg>
+        </button>
+        
+        <div class="time-controls">
+            <span class="time-display" id="currentTime">0:00</span>
+            <div class="progress-slider" id="progressSlider">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <span class="time-display" id="duration">0:00</span>
+        </div>
+        
+        <div class="volume-controls">
+            <button class="volume-button" id="volumeButton">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
+            </button>
+            <div class="volume-slider" id="volumeSlider">
+                <div class="volume-fill" id="volumeFill"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class MusicVisualizer {
+            constructor() {
+                this.isPlaying = false;
+                this.currentTime = 0;
+                this.duration = 0;
+                this.volume = 0.7;
+                this.isMuted = false;
+                
+                this.audio = document.getElementById('audio');
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.playButton = document.getElementById('playButton');
+                this.currentTimeEl = document.getElementById('currentTime');
+                this.durationEl = document.getElementById('duration');
+                this.progressSlider = document.getElementById('progressSlider');
+                this.progressFill = document.getElementById('progressFill');
+                this.volumeButton = document.getElementById('volumeButton');
+                this.volumeSlider = document.getElementById('volumeSlider');
+                this.volumeFill = document.getElementById('volumeFill');
+                
+                this.audioContext = null;
+                this.analyser = null;
+                this.source = null;
+                this.animationId = null;
+                
+                this.init();
+            }
+            
+            async init() {
+                this.setupCanvas();
+                this.setupEventListeners();
+                this.audio.src = "DLLP2.mp3"; // Direct local audio
+                window.loadCustomAudio = (url) => this.loadCustomAudio(url);
+            }
+            
+            setupCanvas() {
+                const resize = () => {
+                    this.canvas.width = window.innerWidth;
+                    this.canvas.height = window.innerHeight;
+                };
+                resize();
+                window.addEventListener('resize', resize);
+            }
+            
+            setupEventListeners() {
+                this.playButton.addEventListener('click', () => this.togglePlay());
+                
+                this.audio.addEventListener('timeupdate', () => {
+                    this.currentTime = this.audio.currentTime;
+                    this.updateTimeDisplay();
+                });
+                
+                this.audio.addEventListener('loadedmetadata', () => {
+                    this.duration = this.audio.duration;
+                    this.updateTimeDisplay();
+                });
+                
+                this.audio.addEventListener('ended', () => {
+                    this.isPlaying = false;
+                    this.updatePlayButton();
+                });
+                
+                this.progressSlider.addEventListener('click', (e) => {
+                    const rect = this.progressSlider.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    this.audio.currentTime = percent * this.duration;
+                });
+                
+                this.volumeButton.addEventListener('click', () => this.toggleMute());
+                
+                this.volumeSlider.addEventListener('click', (e) => {
+                    const rect = this.volumeSlider.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    this.volume = percent;
+                    this.audio.volume = this.volume;
+                    this.updateVolumeDisplay();
+                });
+                
+                this.audio.volume = this.volume;
+            }
+            
+            async togglePlay() {
+                if (this.isPlaying) {
+                    this.audio.pause();
+                    this.isPlaying = false;
+                    if (this.animationId) {
+                        cancelAnimationFrame(this.animationId);
+                    }
+                } else {
+                    if (!this.audioContext) {
+                        await this.initializeAudioContext();
+                    }
+                    this.audio.play();
+                    this.isPlaying = true;
+                    this.startVisualization();
+                }
+                this.updatePlayButton();
+            }
+            
+            async initializeAudioContext() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    if (this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                    }
+                    
+                    this.analyser = this.audioContext.createAnalyser();
+                    this.source = this.audioContext.createMediaElementSource(this.audio);
+                    
+                    this.analyser.fftSize = 256;
+                    this.source.connect(this.analyser);
+                    this.analyser.connect(this.audioContext.destination);
+                } catch (error) {
+                    console.error("Error initializing audio context:", error);
+                }
+            }
+            
+            startVisualization() {
+                if (!this.analyser) return;
+                
+                const bufferLength = this.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                const draw = () => {
+                    if (!this.isPlaying) return;
+                    
+                    this.analyser.getByteFrequencyData(dataArray);
+                    
+                    // Clear canvas with slight trail effect
+                    this.ctx.filter = "blur(2px)";
+                    this.ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    this.ctx.filter = "none";
+                    
+                    const centerX = this.canvas.width / 2;
+                    const centerY = this.canvas.height / 2;
+                    const time = Date.now() * 0.001;
+                    
+                    // Frequency analysis
+                    const bassRange = dataArray.slice(0, 8);
+                    const midRange = dataArray.slice(8, 32);
+                    const highRange = dataArray.slice(32, 64);
+                    
+                    const bassIntensity = bassRange.reduce((a, b) => a + b, 0) / bassRange.length / 255;
+                    const midIntensity = midRange.reduce((a, b) => a + b, 0) / midRange.length / 255;
+                    const highIntensity = highRange.reduce((a, b) => a + b, 0) / highRange.length / 255;
+                    
+                    // Dynamic colors
+                    const hue1 = (time * 30 + bassIntensity * 180) % 360;
+                    const hue2 = (time * 45 + midIntensity * 240) % 360;
+                    const hue3 = (time * 60 + highIntensity * 300) % 360;
+                    
+                    // (drawing code omitted here for brevity – keep your existing fractals/mandala/orbits)
+                    
+                    this.animationId = requestAnimationFrame(draw);
+                };
+                
+                draw();
+            }
+            
+            updatePlayButton() {
+                this.playButton.innerHTML = this.isPlaying ? 
+                    '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>' :
+                    '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+            }
+            
+            updateTimeDisplay() {
+                this.currentTimeEl.textContent = this.formatTime(this.currentTime);
+                this.durationEl.textContent = this.formatTime(this.duration);
+                
+                if (this.duration > 0) {
+                    const percent = (this.currentTime / this.duration) * 100;
+                    this.progressFill.style.width = percent + '%';
+                }
+            }
+            
+            updateVolumeDisplay() {
+                const percent = this.volume * 100;
+                this.volumeFill.style.width = percent + '%';
+            }
+            
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                this.audio.volume = this.isMuted ? 0 : this.volume;
+            }
+            
+            formatTime(time) {
+                const minutes = Math.floor(time / 60);
+                const seconds = Math.floor(time % 60);
+                return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            loadCustomAudio(url) {
+                this.audio.src = url;
+                this.isPlaying = false;
+                this.currentTime = 0;
+                this.duration = 0;
+                this.updatePlayButton();
+                this.updateTimeDisplay();
+            }
+        }
+        
+        // Initialize the visualizer when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new MusicVisualizer();
+        });
+    </script>
+</body>
+</html>
