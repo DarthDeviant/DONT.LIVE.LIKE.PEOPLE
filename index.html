@@ -129,15 +129,10 @@
             border-radius: 2px;
             width: 70%;
         }
-
-        .hidden {
-            display: none;
-        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
-    <!-- Directly load DLLP2.mp3 -->
     <audio id="audio" preload="auto" crossorigin="anonymous" src="DLLP2.mp3"></audio>
     
     <div class="player-controls">
@@ -199,8 +194,7 @@
             async init() {
                 this.setupCanvas();
                 this.setupEventListeners();
-                this.audio.src = "DLLP2.mp3"; // Direct local audio
-                window.loadCustomAudio = (url) => this.loadCustomAudio(url);
+                this.audio.src = "DLLP2.mp3";
             }
             
             setupCanvas() {
@@ -214,30 +208,24 @@
             
             setupEventListeners() {
                 this.playButton.addEventListener('click', () => this.togglePlay());
-                
                 this.audio.addEventListener('timeupdate', () => {
                     this.currentTime = this.audio.currentTime;
                     this.updateTimeDisplay();
                 });
-                
                 this.audio.addEventListener('loadedmetadata', () => {
                     this.duration = this.audio.duration;
                     this.updateTimeDisplay();
                 });
-                
                 this.audio.addEventListener('ended', () => {
                     this.isPlaying = false;
                     this.updatePlayButton();
                 });
-                
                 this.progressSlider.addEventListener('click', (e) => {
                     const rect = this.progressSlider.getBoundingClientRect();
                     const percent = (e.clientX - rect.left) / rect.width;
                     this.audio.currentTime = percent * this.duration;
                 });
-                
                 this.volumeButton.addEventListener('click', () => this.toggleMute());
-                
                 this.volumeSlider.addEventListener('click', (e) => {
                     const rect = this.volumeSlider.getBoundingClientRect();
                     const percent = (e.clientX - rect.left) / rect.width;
@@ -245,7 +233,6 @@
                     this.audio.volume = this.volume;
                     this.updateVolumeDisplay();
                 });
-                
                 this.audio.volume = this.volume;
             }
             
@@ -253,13 +240,9 @@
                 if (this.isPlaying) {
                     this.audio.pause();
                     this.isPlaying = false;
-                    if (this.animationId) {
-                        cancelAnimationFrame(this.animationId);
-                    }
+                    if (this.animationId) cancelAnimationFrame(this.animationId);
                 } else {
-                    if (!this.audioContext) {
-                        await this.initializeAudioContext();
-                    }
+                    if (!this.audioContext) await this.initializeAudioContext();
                     this.audio.play();
                     this.isPlaying = true;
                     this.startVisualization();
@@ -270,14 +253,9 @@
             async initializeAudioContext() {
                 try {
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    
-                    if (this.audioContext.state === 'suspended') {
-                        await this.audioContext.resume();
-                    }
-                    
+                    if (this.audioContext.state === 'suspended') await this.audioContext.resume();
                     this.analyser = this.audioContext.createAnalyser();
                     this.source = this.audioContext.createMediaElementSource(this.audio);
-                    
                     this.analyser.fftSize = 256;
                     this.source.connect(this.analyser);
                     this.analyser.connect(this.audioContext.destination);
@@ -288,44 +266,27 @@
             
             startVisualization() {
                 if (!this.analyser) return;
-                
                 const bufferLength = this.analyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
-                
                 const draw = () => {
                     if (!this.isPlaying) return;
-                    
                     this.analyser.getByteFrequencyData(dataArray);
-                    
-                    // Clear canvas with slight trail effect
-                    this.ctx.filter = "blur(2px)";
-                    this.ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
+                    this.ctx.fillStyle = "rgba(0,0,0,0.2)";
                     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-                    this.ctx.filter = "none";
-                    
-                    const centerX = this.canvas.width / 2;
-                    const centerY = this.canvas.height / 2;
-                    const time = Date.now() * 0.001;
-                    
-                    // Frequency analysis
-                    const bassRange = dataArray.slice(0, 8);
-                    const midRange = dataArray.slice(8, 32);
-                    const highRange = dataArray.slice(32, 64);
-                    
-                    const bassIntensity = bassRange.reduce((a, b) => a + b, 0) / bassRange.length / 255;
-                    const midIntensity = midRange.reduce((a, b) => a + b, 0) / midRange.length / 255;
-                    const highIntensity = highRange.reduce((a, b) => a + b, 0) / highRange.length / 255;
-                    
-                    // Dynamic colors
-                    const hue1 = (time * 30 + bassIntensity * 180) % 360;
-                    const hue2 = (time * 45 + midIntensity * 240) % 360;
-                    const hue3 = (time * 60 + highIntensity * 300) % 360;
-                    
-                    // (drawing code omitted here for brevity – keep your existing fractals/mandala/orbits)
-                    
+                    const barWidth = (this.canvas.width / bufferLength) * 2.5;
+                    let barHeight;
+                    let x = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        barHeight = dataArray[i];
+                        const r = 200 + barHeight / 2;
+                        const g = 50 + barHeight / 4;
+                        const b = 150;
+                        this.ctx.fillStyle = `rgb(${r},${g},${b})`;
+                        this.ctx.fillRect(x, this.canvas.height - barHeight, barWidth, barHeight);
+                        x += barWidth + 1;
+                    }
                     this.animationId = requestAnimationFrame(draw);
                 };
-                
                 draw();
             }
             
@@ -338,7 +299,6 @@
             updateTimeDisplay() {
                 this.currentTimeEl.textContent = this.formatTime(this.currentTime);
                 this.durationEl.textContent = this.formatTime(this.duration);
-                
                 if (this.duration > 0) {
                     const percent = (this.currentTime / this.duration) * 100;
                     this.progressFill.style.width = percent + '%';
@@ -346,8 +306,7 @@
             }
             
             updateVolumeDisplay() {
-                const percent = this.volume * 100;
-                this.volumeFill.style.width = percent + '%';
+                this.volumeFill.style.width = (this.volume * 100) + '%';
             }
             
             toggleMute() {
@@ -360,21 +319,8 @@
                 const seconds = Math.floor(time % 60);
                 return `${minutes}:${seconds.toString().padStart(2, '0')}`;
             }
-            
-            loadCustomAudio(url) {
-                this.audio.src = url;
-                this.isPlaying = false;
-                this.currentTime = 0;
-                this.duration = 0;
-                this.updatePlayButton();
-                this.updateTimeDisplay();
-            }
         }
-        
-        // Initialize the visualizer when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            new MusicVisualizer();
-        });
+        document.addEventListener('DOMContentLoaded', () => new MusicVisualizer());
     </script>
 </body>
 </html>
